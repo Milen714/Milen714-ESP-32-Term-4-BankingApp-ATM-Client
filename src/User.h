@@ -12,6 +12,7 @@ public:
     String firstName;
     String lastName;
     String email;
+    String password; // I will be defining a few hardcoded users for testing, so I will store the password here in plaintext. In a real application, this should never be done.
     String role;
     String phoneNumber;
     String token; // JWT
@@ -24,6 +25,14 @@ public:
     User(const String &json)
     {
         fromJson(json);
+    }
+
+    // Login Profile constructor
+    User(const String &email, const String &password)
+    {
+
+        this->email = email;
+        this->password = password;
     }
 
 private:

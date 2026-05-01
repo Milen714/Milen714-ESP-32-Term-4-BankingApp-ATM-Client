@@ -110,7 +110,7 @@ bool loginToApi(const String &email, const String &password)
     if (WiFi.status() != WL_CONNECTED)
     {
         Serial.println("WiFi not connected.");
-        return false;
+        throw std::runtime_error("WiFi not connected");
     }
 
     HTTPClient http;
@@ -136,7 +136,7 @@ bool loginToApi(const String &email, const String &password)
     if (httpCode != 200 && httpCode != 201)
     {
         Serial.println("Login failed.");
-        return false;
+        throw std::runtime_error("Login failed: HTTP ");
     }
 
     StaticJsonDocument<1024> responseDoc;
@@ -153,14 +153,14 @@ bool loginToApi(const String &email, const String &password)
     if (currentUser.token.length() == 0)
     {
         Serial.println("No JWT token found in response.");
-        return false;
+        throw std::runtime_error("No JWT token found");
     }
 
     Serial.println("Login successful.");
     Serial.println("User: " + currentUser.fullName());
     Serial.println("JWT saved globally.");
 
-    return !currentUser.token.isEmpty();
+    return true;
 }
 
 bool fetchUserAccounts(User &user)
@@ -175,6 +175,7 @@ bool fetchUserAccounts(User &user)
     http.begin(String(API_URL) + "/accounts/me");
 
     http.addHeader("Content-Type", "application/json");
+    Serial.println("Using JWT: " + user.token);
     http.addHeader("Authorization", "Bearer " + user.token);
 
     int httpCode = http.GET();

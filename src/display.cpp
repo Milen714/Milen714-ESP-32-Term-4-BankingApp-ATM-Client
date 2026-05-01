@@ -6,6 +6,16 @@
 extern Adafruit_ST7735 tft;
 extern User currentUser;
 extern Account currentAccount;
+extern std::vector<User> usersTologin;
+
+PaginationInfo calculatePagination(int selectedIndex, int itemsPerPage, int totalItems)
+{
+    PaginationInfo info;
+    info.pageOffset = (selectedIndex / itemsPerPage) * itemsPerPage;
+    info.maxPages = (totalItems + itemsPerPage - 1) / itemsPerPage;
+    info.currentPage = (selectedIndex / itemsPerPage) + 1;
+    return info;
+}
 
 void tftSetup()
 {
@@ -24,6 +34,40 @@ void drawHeader(const String &content)
     tft.print(content);
 
     tft.drawFastHLine(0, 28, tft.width(), colorValue(DisplayColor::White));
+}
+void drawFooter(String content)
+{
+    tft.setCursor(45, tft.height() - 10);
+    tft.setTextColor(colorValue(DisplayColor::White));
+    tft.print(content);
+}
+void drawPageInfo(int maxPages, const int startY, int drawnItems, const int buttonHeight, const int spacing, int currentPage)
+{
+    if (maxPages > 1)
+    {
+        int lastButtonY = startY + (drawnItems - 1) * (buttonHeight + spacing);
+        int pageTextY = lastButtonY + buttonHeight + 5;
+
+        tft.setCursor(8, pageTextY);
+        tft.setTextColor(colorValue(DisplayColor::Cyan));
+        tft.setTextSize(1);
+        tft.print("Page ");
+        tft.print(currentPage);
+        tft.print("/");
+        tft.print(maxPages);
+    }
+}
+void drawPageInfo(int currentPage, int maxPages)
+{
+    String pageInfo = "Page " + String(currentPage) + "/" + String(maxPages);
+    int textWidth = pageInfo.length() * 6; // Approximate width of text
+    int x = tft.width() - textWidth - 8;
+    int y = 9;
+
+    tft.setCursor(x, y);
+    tft.setTextColor(colorValue(DisplayColor::White));
+    tft.setTextSize(1);
+    tft.print(pageInfo);
 }
 
 void drawMenuButton(int x, int y, int w, int h, const String &label, bool selected)
@@ -120,41 +164,93 @@ void drawResultScreen(const String &title, const String &message, bool success)
     tft.print("Balance: EUR ");
     tft.print(currentAccount.balance, 2);
 
-    tft.setCursor(10, 140);
-    tft.setTextColor(colorValue(DisplayColor::Cyan));
-    tft.print("Select = Home");
+    drawFooter("Select to return to menu");
 }
-void drawAccountSelectionScreen(int selectedIndex, int pageOffset)
+void drawAccountSelectionScreen(int selectedIndex)
 {
     tft.fillScreen(colorValue(DisplayColor::Black));
     drawHeader("Select Account");
 
     const int accountsPerPage = 2;
     const int totalAccounts = currentUser.accounts.size();
-    const int maxPages = (totalAccounts + accountsPerPage - 1) / accountsPerPage;
+    const int buttonHeight = 30;
+    const int spacing = 5;
+    const int startY = 38;
 
-    // Display up to 2 accounts on this page
-    for (int i = 0; i < accountsPerPage && (pageOffset + i) < totalAccounts; i++)
+    PaginationInfo pagination = calculatePagination(selectedIndex, accountsPerPage, totalAccounts);
+
+    int drawnItems = 0;
+
+    if (totalAccounts > 0)
     {
-        int accountIndex = pageOffset + i;
-        int yPos = 50 + i * 40;
-        drawMenuButton(10, yPos, 140, 30, currentUser.accounts[accountIndex].type, selectedIndex == i);
+        for (int i = 0; i < accountsPerPage && (pagination.pageOffset + i) < totalAccounts; i++)
+        {
+            int accountIndex = pagination.pageOffset + i;
+            int yPos = startY + i * (buttonHeight + spacing);
+
+            drawMenuButton(
+                10, yPos, 140, buttonHeight,
+                currentUser.accounts[accountIndex].type + " (" +
+                    String(currentUser.accounts[accountIndex].balance) + " EUR)",
+                selectedIndex == accountIndex);
+
+            drawnItems++;
+        }
+
+        drawPageInfo(pagination.maxPages, startY, drawnItems, buttonHeight, spacing, pagination.currentPage);
+
+        drawFooter("Prev/Next + Select");
     }
-
-    // Show page info if there are multiple pages
-    if (maxPages > 1)
+    else
     {
-        int currentPage = pageOffset / accountsPerPage + 1;
-        tft.setCursor(8, 130);
-        tft.setTextColor(colorValue(DisplayColor::Cyan));
+        tft.setCursor(10, 60);
+        tft.setTextColor(colorValue(DisplayColor::Red));
         tft.setTextSize(1);
-        tft.print("Page ");
-        tft.print(currentPage);
-        tft.print("/");
-        tft.print(maxPages);
+        tft.print("No accounts available");
+        drawFooter("Select to return");
+    }
+}
+
+void drawUserAccontsSelectionScreen(int selectedIndex)
+{
+    tft.fillScreen(colorValue(DisplayColor::Black));
+    drawHeader("Select User");
+
+    // For simplicity, we will just show the current user's email as the only option
+    // drawMenuButton(10, 60, 140, 30, currentUser.email, selectedIndex == 0);
+    const int accountsPerPage = 2;
+    const int totalUserAccounts = usersTologin.size();
+    const int buttonHeight = 30;
+    const int spacing = 5;
+    const int startY = 38;
+
+    PaginationInfo pagination = calculatePagination(selectedIndex, accountsPerPage, totalUserAccounts);
+
+    int drawnItems = 0;
+    if (totalUserAccounts > 0)
+    {
+        for (int i = 0; i < accountsPerPage && (pagination.pageOffset + i) < totalUserAccounts; i++)
+        {
+            int accountIndex = pagination.pageOffset + i;
+            int yPos = startY + i * (buttonHeight + spacing);
+
+            drawMenuButton(
+                10, yPos, 140, buttonHeight, usersTologin[accountIndex].email,
+                selectedIndex == accountIndex);
+
+            drawnItems++;
+        }
+
+        drawPageInfo(pagination.maxPages, startY, drawnItems, buttonHeight, spacing, pagination.currentPage);
+    }
+    else
+    {
+        tft.setCursor(10, 60);
+        tft.setTextColor(colorValue(DisplayColor::Red));
+        tft.setTextSize(1);
+        tft.print("No users available");
     }
 
-    tft.setCursor(8, 150);
-    tft.setTextColor(colorValue(DisplayColor::White));
-    tft.print("Prev/Next + Select");
+    // ---------- Footer ----------
+    drawFooter("Prev/Next + Select");
 }

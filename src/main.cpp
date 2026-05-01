@@ -4,10 +4,6 @@
 #include <ArduinoJson.h>
 
 #include <AsyncTCP.h>
-// #include <ESPAsyncWebServer.h>
-// #include <TFT_eSPI.h>
-// #include <Adafruit_GFX.h>
-// #include <Adafruit_ST7735.h>
 #include <SPI.h>
 #include "webserver.h"
 #include "display.h"
@@ -18,9 +14,6 @@
 #include "Account.h"
 #include "WiFiManager.h"
 #include "WiFiConfig.h"
-
-// ---------- API ----------
-const char *API_URL = "https://bookswap.art/api";
 
 // Pin definitions
 #define TFT_CS 5
@@ -41,21 +34,19 @@ Button btnSelect(BTN_SELECT);
 
 AsyncWebServer server(80);
 
-User currentUser;       // Global variable to hold the current user information
-Account currentAccount; // Global variable to hold the currently selected account
-String lastTitle = "Waiting...";
-String lastValue = "No data yet";
-String lastUpdated = "Never";
+User currentUser;               // Global variable to hold the current user information
+Account currentAccount;         // Global variable to hold the currently selected account
+std::vector<User> usersTologin; // For testing purposes
 
 float balance = 250.00;
-
 enum class Screen
 {
   ActionSelection,
   Amount,
   Loading,
   Result,
-  AccountSelection
+  AccountSelection,
+  UserSelection
 };
 
 enum class AtmAction
@@ -69,13 +60,18 @@ Screen currentScreen = Screen::ActionSelection;
 AtmAction currentAction = AtmAction::None;
 
 int selectedIndex = 0;
-
 const int amountOptions[] = {10, 20, 50, 100};
 const int amountCount = sizeof(amountOptions) / sizeof(amountOptions[0]);
 
 bool lastTransactionSuccess = false;
 String lastResultMessage = "";
 
+void showUserSelection()
+{
+  currentScreen = Screen::UserSelection;
+  selectedIndex = 0;
+  drawUserAccontsSelectionScreen(selectedIndex);
+}
 void showActionSelection()
 {
   currentScreen = Screen::ActionSelection;
@@ -88,7 +84,7 @@ void showAccountSelection()
 {
   currentScreen = Screen::AccountSelection;
   selectedIndex = 0;
-  drawAccountSelectionScreen(selectedIndex, 0);
+  drawAccountSelectionScreen(selectedIndex);
 }
 
 void showAmountScreen(AtmAction action)
@@ -117,6 +113,17 @@ void movePrevious()
 
     drawActionSelectionScreen(selectedIndex);
   }
+  else if (currentScreen == Screen::UserSelection)
+  {
+    selectedIndex--;
+
+    if (selectedIndex < 0)
+    {
+      selectedIndex = usersTologin.size() - 1;
+    }
+
+    drawUserAccontsSelectionScreen(selectedIndex);
+  }
 
   else if (currentScreen == Screen::AccountSelection)
   {
@@ -127,7 +134,7 @@ void movePrevious()
       selectedIndex = currentUser.accounts.size() - 1;
     }
 
-    drawAccountSelectionScreen(selectedIndex, 0);
+    drawAccountSelectionScreen(selectedIndex);
   }
 
   else if (currentScreen == Screen::Amount)
@@ -161,6 +168,17 @@ void moveNext()
 
     drawActionSelectionScreen(selectedIndex);
   }
+  else if (currentScreen == Screen::UserSelection)
+  {
+    selectedIndex++;
+
+    if (selectedIndex >= usersTologin.size())
+    {
+      selectedIndex = 0;
+    }
+
+    drawUserAccontsSelectionScreen(selectedIndex);
+  }
 
   else if (currentScreen == Screen::AccountSelection)
   {
@@ -171,7 +189,7 @@ void moveNext()
       selectedIndex = 0;
     }
 
-    drawAccountSelectionScreen(selectedIndex, 0);
+    drawAccountSelectionScreen(selectedIndex);
   }
 
   else if (currentScreen == Screen::Amount)
@@ -238,11 +256,40 @@ void handleSelect()
       showAccountSelection();
     }
   }
+  else if (currentScreen == Screen::UserSelection)
+  {
+    try
+    {
+      drawLoadingScreen("Logging in...");
+      currentUser = usersTologin[selectedIndex];
+      bool loginSuccess = loginToApi(usersTologin[selectedIndex].email, usersTologin[selectedIndex].password);
+      if (loginSuccess)
+      {
+        fetchUserAccounts(currentUser);
+        showAccountSelection();
+      }
+      else
+      {
+        drawResultScreen("Login Failed", "Invalid credentials", false);
+      }
+    }
+    catch (const std::exception &e)
+    {
+      drawResultScreen("Login Failed", String(e.what()), false);
+    }
+  }
 
   else if (currentScreen == Screen::AccountSelection)
   {
-    currentAccount = currentUser.accounts[selectedIndex];
-    showActionSelection();
+    if (selectedIndex < currentUser.accounts.size())
+    {
+      currentAccount = currentUser.accounts[selectedIndex];
+      showActionSelection();
+    }
+    else if (currentUser.accounts.size() == 0)
+    {
+      showUserSelection();
+    }
   }
 
   else if (currentScreen == Screen::Amount)
@@ -259,7 +306,7 @@ void handleSelect()
 
   else if (currentScreen == Screen::Result)
   {
-    showAccountSelection();
+    showUserSelection();
   }
 }
 
@@ -279,16 +326,24 @@ void setup()
 
   tftSetup();
 
+  // Initialize test users
+  usersTologin.push_back(User("admin@bank.nl", "password"));
+  usersTologin.push_back(User("john@bank.nl", "password"));
+  usersTologin.push_back(User("jane@bank.nl", "password"));
+  usersTologin.push_back(User("karen@bank.nl", "password"));
+  usersTologin.push_back(User("joe@bank.nl", "password"));
+
   connectWiFi(WIFI_SSID, WIFI_PASSWORD);
 
   setupWebServer();
 
-  loginToApi("john@bank.nl", "password");
+  showUserSelection();
+  // loginToApi("john@bank.nl", "password");
 
   // showActionSelection();
-  fetchUserAccounts(currentUser);
-  Serial.println("User accounts fetched: " + String(currentUser.accounts.size()));
-  showAccountSelection();
+  // fetchUserAccounts(currentUser);
+  // Serial.println("User accounts fetched: " + String(currentUser.accounts.size()));
+  // showAccountSelection();
 }
 
 void enableBacklight()
