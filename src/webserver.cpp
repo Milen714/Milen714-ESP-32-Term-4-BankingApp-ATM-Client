@@ -9,8 +9,8 @@ extern User currentUser;
 
 void setupWebServer()
 {
-    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
-              {
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
+            {
     String html = R"rawliteral(
       <!DOCTYPE html>
       <html>
@@ -27,5 +27,5 @@ void setupWebServer()
 
     request->send(200, "text/html", html); });
 
-    server.begin();
+  server.begin();
 }

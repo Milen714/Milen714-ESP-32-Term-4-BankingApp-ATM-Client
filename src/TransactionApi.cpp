@@ -172,7 +172,7 @@ bool fetchUserAccounts(User &user)
     }
 
     HTTPClient http;
-    http.begin(String(API_URL) + "/accounts/me");
+    http.begin(String(API_URL) + "/accounts?ownerId=" + String(user.id));
 
     http.addHeader("Content-Type", "application/json");
     Serial.println("Using JWT: " + user.token);
@@ -192,7 +192,7 @@ bool fetchUserAccounts(User &user)
         return false;
     }
 
-    // Parse JSON array of accounts
+    // Parse JSON response with pagination wrapper
     StaticJsonDocument<2048> doc;
     DeserializationError error = deserializeJson(doc, response);
 
@@ -205,10 +205,10 @@ bool fetchUserAccounts(User &user)
 
     user.accounts.clear();
 
-    // Assume response is an array of account objects
-    if (doc.is<JsonArray>())
+    // Response is now an object with "data" field containing the accounts array
+    if (doc.containsKey("data"))
     {
-        JsonArray arr = doc.as<JsonArray>();
+        JsonArray arr = doc["data"].as<JsonArray>();
         for (JsonObject obj : arr)
         {
             Serial.println("Parsing account:");
