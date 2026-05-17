@@ -14,6 +14,12 @@
 #include "Account.h"
 #include "WiFiManager.h"
 #include "WiFiConfig.h"
+#include "CardReader.h"
+#include "Servo.h"
+
+#include <Wire.h>
+#include <Adafruit_PN532.h>
+#include <ESP32Servo.h>
 
 // Pin definitions
 #define TFT_CS 5
@@ -21,12 +27,21 @@
 #define TFT_RST 17
 #define TFT_BL 25 // active LOW
 
+#define PN532_SDA 21
+#define PN532_SCL 22
+
+#define SERVO_PIN 27
+
 // button pins
 #define BTN_PREV 32
 #define BTN_NEXT 33
 #define BTN_SELECT 26
 
 Adafruit_ST7735 tft(TFT_CS, TFT_DC, TFT_RST);
+
+// Adafruit_PN532 nfc(PN532_SDA, PN532_SCL);
+
+Servo atmServo;
 
 Button btnPrev(BTN_PREV);
 Button btnNext(BTN_NEXT);
@@ -39,8 +54,10 @@ Account currentAccount;         // Global variable to hold the currently selecte
 std::vector<User> usersTologin; // For testing purposes
 
 float balance = 250.00;
+bool cardOperationInProgress = false;
 enum class Screen
 {
+  CardLogin,
   ActionSelection,
   Amount,
   Loading,
@@ -66,6 +83,12 @@ const int amountCount = sizeof(amountOptions) / sizeof(amountOptions[0]);
 bool lastTransactionSuccess = false;
 String lastResultMessage = "";
 
+void showCardloginScreen()
+{
+  currentScreen = Screen::CardLogin;
+  selectedIndex = 0;
+  drawCardLoginScreen(selectedIndex);
+}
 void showUserSelection()
 {
   currentScreen = Screen::UserSelection;
@@ -112,6 +135,17 @@ void movePrevious()
     }
 
     drawActionSelectionScreen(selectedIndex);
+  }
+  else if (currentScreen == Screen::CardLogin)
+  {
+    selectedIndex--;
+
+    if (selectedIndex < 0)
+    {
+      selectedIndex = 0; // Only one option on card login screen
+    }
+
+    showUserSelection();
   }
   else if (currentScreen == Screen::UserSelection)
   {
@@ -236,8 +270,29 @@ void performTransaction(float amount)
       lastTransactionSuccess ? "Success" : "Failed",
       lastResultMessage,
       lastTransactionSuccess);
+  if (lastTransactionSuccess)
+  {
+    openAtmDoor();
+    delay(5000); // Keep vault open for 5 seconds
+    closeAtmDoor();
+  }
 }
+void handleLogin(User &user)
+{
+  drawLoadingScreen("Logging in...");
 
+  bool loginSuccess = loginToApi(user.email, user.password);
+
+  if (loginSuccess)
+  {
+    fetchUserAccounts(currentUser);
+    showAccountSelection();
+  }
+  else
+  {
+    drawResultScreen("Login Failed", "Invalid credentials", false);
+  }
+}
 void handleSelect()
 {
   if (currentScreen == Screen::ActionSelection)
@@ -254,6 +309,33 @@ void handleSelect()
     else if (selectedIndex == 2)
     {
       showAccountSelection();
+    }
+  }
+  else if (currentScreen == Screen::CardLogin)
+  {
+    if (selectedIndex == 0)
+    {
+      cardOperationInProgress = true;
+      drawLoadingScreen("Reading card...");
+      String jsonData = readDataMultipleBlocks();
+      Serial.println("Read JSON from card: ");
+      Serial.println(jsonData);
+      User userFromCard = jsonToUserData(jsonData);
+      Serial.println("Parsed user data from JSON:");
+      Serial.println("Email: " + userFromCard.email);
+      if (userFromCard.email.length() == 0 || userFromCard.password.length() == 0)
+      {
+        drawResultScreen("Login Failed", "No valid user data found on card", false);
+        cardOperationInProgress = false;
+        delay(2000); // Show error message for 2 seconds
+        showCardloginScreen();
+        return;
+      }
+      drawResultScreen("Welcome", "Email: " + userFromCard.email, true);
+      delay(2000); // Show welcome message for 2 seconds
+      handleLogin(userFromCard);
+      cardOperationInProgress = false;
+      delay(100); // Small delay to prevent rapid re-triggering
     }
   }
   else if (currentScreen == Screen::UserSelection)
@@ -309,6 +391,11 @@ void handleSelect()
     showUserSelection();
   }
 }
+void enableBacklight()
+{
+  pinMode(TFT_BL, OUTPUT);
+  digitalWrite(TFT_BL, LOW); // ON because active LOW
+}
 
 // ---------- Main ----------
 void setup()
@@ -326,6 +413,11 @@ void setup()
 
   tftSetup();
 
+  // servo setup
+  setupServo();
+
+  setupCardReader();
+
   // Initialize test users
   usersTologin.push_back(User("admin@bank.nl", "password"));
   usersTologin.push_back(User("john@bank.nl", "password"));
@@ -337,7 +429,8 @@ void setup()
 
   setupWebServer();
 
-  showUserSelection();
+  showCardloginScreen();
+  // showUserSelection();
   // loginToApi("john@bank.nl", "password");
 
   // showActionSelection();
@@ -346,14 +439,53 @@ void setup()
   // showAccountSelection();
 }
 
-void enableBacklight()
-{
-  pinMode(TFT_BL, OUTPUT);
-  digitalWrite(TFT_BL, LOW); // ON because active LOW
-}
-
 void loop()
 {
+  if (Serial.available() > 0 && !cardOperationInProgress)
+  {
+    char firstChar = Serial.peek();
+    if (firstChar == 'w' || firstChar == 'W')
+    {
+      // Consume the input
+      while (Serial.available() > 0)
+      {
+        Serial.read();
+      }
+
+      cardOperationInProgress = true;
+      User userToWrite = usersTologin[1];
+      String jsonData = userDataToJson(userToWrite);
+      Serial.println("Writing JSON to card: ");
+      Serial.println(jsonData);
+      writeDataMultipleBlocks(jsonData);
+      cardOperationInProgress = false;
+      delay(100); // Small delay to prevent rapid re-triggering
+    }
+    else if (firstChar == 'r' || firstChar == 'R')
+    {
+      // Consume the input
+      while (Serial.available() > 0)
+      {
+        Serial.read();
+      }
+
+      cardOperationInProgress = true;
+      String jsonData = readDataMultipleBlocks();
+      Serial.println("Read JSON from card: ");
+      Serial.println(jsonData);
+      User userFromCard = jsonToUserData(jsonData);
+      Serial.println("Parsed user data from JSON:");
+      Serial.println("Email: " + userFromCard.email);
+      Serial.println("Password: " + userFromCard.password);
+      cardOperationInProgress = false;
+      delay(100); // Small delay to prevent rapid re-triggering
+    }
+    else
+    {
+      handleServoSerialInput();
+    }
+  }
+
   if (btnPrev.wasPressed())
   {
     movePrevious();

@@ -254,3 +254,16 @@ void drawUserAccontsSelectionScreen(int selectedIndex)
     // ---------- Footer ----------
     drawFooter("Prev/Next + Select");
 }
+void drawCardLoginScreen(int selectedIndex)
+{
+    tft.fillScreen(colorValue(DisplayColor::Black));
+    drawHeader("Card Login");
+
+    tft.setCursor(10, 60);
+    tft.setTextColor(colorValue(DisplayColor::Green));
+    tft.setTextSize(1);
+    drawMenuButton(10, 60, 140, 30, "Login with Card", selectedIndex == 0);
+
+    // ---------- Footer ----------
+    drawFooter("Prev/Next + Select");
+}

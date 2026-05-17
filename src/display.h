@@ -46,3 +46,4 @@ void drawAccountSelectionScreen(int selectedIndex);
 void drawFooter(String content = "Prev/Next + Select");
 void drawPageInfo(int maxPages, const int startY, int drawnItems, const int buttonHeight, const int spacing, int currentPage);
 void drawUserAccontsSelectionScreen(int selectedIndex);
+void drawCardLoginScreen(int selectedIndex);
