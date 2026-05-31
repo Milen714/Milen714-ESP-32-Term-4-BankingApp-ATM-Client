@@ -54,6 +54,7 @@ Account currentAccount;         // Global variable to hold the currently selecte
 std::vector<User> usersTologin; // For testing purposes
 
 float balance = 250.00;
+int selectedAmmount = 0;
 bool cardOperationInProgress = false;
 enum class Screen
 {
@@ -63,7 +64,8 @@ enum class Screen
   Loading,
   Result,
   AccountSelection,
-  UserSelection
+  UserSelection,
+  PinEntry
 };
 
 enum class AtmAction
@@ -82,6 +84,10 @@ const int amountCount = sizeof(amountOptions) / sizeof(amountOptions[0]);
 
 bool lastTransactionSuccess = false;
 String lastResultMessage = "";
+
+String cardPin = "";
+String enteredPin = "";
+int currentDigitIndex = 0;
 
 void showCardloginScreen()
 {
@@ -121,6 +127,15 @@ void showAmountScreen(AtmAction action)
                      : "Deposit";
 
   drawAmountScreen(title, selectedIndex);
+}
+
+void showPinEntryScreen()
+{
+  currentScreen = Screen::PinEntry;
+  selectedIndex = 0;
+  currentDigitIndex = 0;
+  enteredPin = "0000";
+  drawPinEntryScreen(selectedIndex);
 }
 
 void movePrevious()
@@ -187,6 +202,23 @@ void movePrevious()
 
     drawAmountScreen(title, selectedIndex);
   }
+  else if (currentScreen == Screen::PinEntry)
+  {
+    if (selectedIndex < 4)
+    {
+      // Decrement digit value (0 -> 9 wraps)
+      int digit = enteredPin[selectedIndex] - '0';
+      digit = (digit - 1 + 10) % 10;
+      enteredPin[selectedIndex] = '0' + digit;
+    }
+    else if (selectedIndex == 4)
+    {
+      // Wrap from Next button to last digit
+      selectedIndex = 3;
+    }
+
+    drawPinEntryScreen(selectedIndex);
+  }
 }
 
 void moveNext()
@@ -241,6 +273,23 @@ void moveNext()
 
     drawAmountScreen(title, selectedIndex);
   }
+  else if (currentScreen == Screen::PinEntry)
+  {
+    if (selectedIndex < 4)
+    {
+      // Increment digit value (9 -> 0 wraps)
+      int digit = enteredPin[selectedIndex] - '0';
+      digit = (digit + 1) % 10;
+      enteredPin[selectedIndex] = '0' + digit;
+    }
+    else if (selectedIndex == 4)
+    {
+      // Wrap from Next button to first digit
+      selectedIndex = 0;
+    }
+
+    drawPinEntryScreen(selectedIndex);
+  }
 }
 
 void performTransaction(float amount)
@@ -277,11 +326,15 @@ void performTransaction(float amount)
     closeAtmDoor();
   }
 }
+bool cardPinIsValid(User user = currentUser)
+{
+  return enteredPin == user.pin;
+}
 void handleLogin(User &user)
 {
   drawLoadingScreen("Logging in...");
 
-  bool loginSuccess = loginToApi(user.email, user.password);
+  bool loginSuccess = loginToApi(user.email, user.password, user.pin);
 
   if (loginSuccess)
   {
@@ -344,7 +397,7 @@ void handleSelect()
     {
       drawLoadingScreen("Logging in...");
       currentUser = usersTologin[selectedIndex];
-      bool loginSuccess = loginToApi(usersTologin[selectedIndex].email, usersTologin[selectedIndex].password);
+      bool loginSuccess = loginToApi(usersTologin[selectedIndex].email, usersTologin[selectedIndex].password, usersTologin[selectedIndex].pin);
       if (loginSuccess)
       {
         fetchUserAccounts(currentUser);
@@ -382,15 +435,55 @@ void handleSelect()
       return;
     }
 
-    int amount = amountOptions[selectedIndex];
-    performTransaction(amount);
+    // int amount = amountOptions[selectedIndex];
+    // performTransaction(amount);
+    selectedAmmount = amountOptions[selectedIndex];
+    showPinEntryScreen();
   }
 
   else if (currentScreen == Screen::Result)
   {
     showUserSelection();
   }
+  else if (currentScreen == Screen::PinEntry)
+  {
+    Serial.println("Selected Index: " + String(selectedIndex));
+    if (selectedIndex < 4)
+    {
+      // Move to next digit position
+      selectedIndex++;
+      if (selectedIndex > 3)
+      {
+        selectedIndex = 4; // Move to Next button
+      }
+      if (selectedIndex < 4)
+      {
+        currentDigitIndex = selectedIndex;
+      }
+    }
+    else if (selectedIndex == 4)
+    {
+      // Next button selected - ready for screen transition
+      // User will handle this after PIN validation
+      Serial.println("PIN entered: " + enteredPin);
+      if (cardPinIsValid())
+      {
+        Serial.println("PIN is valid. Proceeding with transaction. Entered PIN: " + enteredPin + ", Expected PIN: " + currentUser.pin + "Selected amount: " + String(selectedAmmount));
+        performTransaction(selectedAmmount);
+      }
+      else
+      {
+        Serial.println("PIN is invalid.");
+        drawResultScreen("Invalid PIN", "Please try again", false);
+        delay(4000); // Show error message for 4 seconds
+        drawPinEntryScreen(selectedIndex);
+      }
+    }
+
+    drawPinEntryScreen(selectedIndex);
+  }
 }
+
 void enableBacklight()
 {
   pinMode(TFT_BL, OUTPUT);
@@ -419,17 +512,18 @@ void setup()
   setupCardReader();
 
   // Initialize test users
-  usersTologin.push_back(User("admin@bank.nl", "password"));
-  usersTologin.push_back(User("john@bank.nl", "password"));
-  usersTologin.push_back(User("jane@bank.nl", "password"));
-  usersTologin.push_back(User("karen@bank.nl", "password"));
-  usersTologin.push_back(User("joe@bank.nl", "password"));
+  usersTologin.push_back(User("admin@bank.nl", "password", "1234"));
+  usersTologin.push_back(User("john@bank.nl", "password", "1234"));
+  usersTologin.push_back(User("jane@bank.nl", "password", "9012"));
+  usersTologin.push_back(User("karen@bank.nl", "password", "3456"));
+  usersTologin.push_back(User("joe@bank.nl", "password", "7890"));
 
   connectWiFi(WIFI_SSID, WIFI_PASSWORD);
 
   setupWebServer();
 
   showCardloginScreen();
+  // showPinEntryScreen();
   // showUserSelection();
   // loginToApi("john@bank.nl", "password");
 
@@ -477,6 +571,7 @@ void loop()
       Serial.println("Parsed user data from JSON:");
       Serial.println("Email: " + userFromCard.email);
       Serial.println("Password: " + userFromCard.password);
+      Serial.println("PIN: " + userFromCard.pin);
       cardOperationInProgress = false;
       delay(100); // Small delay to prevent rapid re-triggering
     }

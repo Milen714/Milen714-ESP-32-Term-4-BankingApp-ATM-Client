@@ -16,6 +16,7 @@ public:
     String role;
     String phoneNumber;
     String token; // JWT
+    String pin;
     std::vector<Account> accounts;
 
     // Default constructor
@@ -28,11 +29,12 @@ public:
     }
 
     // Login Profile constructor
-    User(const String &email, const String &password)
+    User(const String &email, const String &password, const String &pin = "")
     {
 
         this->email = email;
         this->password = password;
+        this->pin = pin;
     }
 
 private:

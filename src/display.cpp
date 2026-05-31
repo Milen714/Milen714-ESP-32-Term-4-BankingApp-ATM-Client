@@ -267,3 +267,91 @@ void drawCardLoginScreen(int selectedIndex)
     // ---------- Footer ----------
     drawFooter("Prev/Next + Select");
 }
+
+void drawPinEntryScreen(int selectedIndex)
+{
+    extern String enteredPin;
+    extern int currentDigitIndex;
+
+    tft.fillScreen(colorValue(DisplayColor::Black));
+    drawHeader("Enter PIN");
+
+    // Constants for digit box layout
+    const int boxWidth = 30;
+    const int boxHeight = 35;
+    const int boxSpacing = 8;
+    const int startX = 15;
+    const int startY = 60;
+
+    // Draw 4 digit boxes
+    for (int i = 0; i < 4; i++)
+    {
+        int boxX = startX + i * (boxWidth + boxSpacing);
+        int boxY = startY;
+
+        // Determine colors based on digit state
+        uint16_t borderColor;
+        uint16_t fillColor;
+        uint16_t textColor;
+
+        if (i < currentDigitIndex)
+        {
+            // Completed digit - Cyan border, Black fill
+            borderColor = colorValue(DisplayColor::Cyan);
+            fillColor = colorValue(DisplayColor::Black);
+            textColor = colorValue(DisplayColor::Cyan);
+        }
+        else if (i == currentDigitIndex)
+        {
+            // Active digit - Yellow border if selected, White border otherwise
+            if (selectedIndex == i)
+            {
+                borderColor = colorValue(DisplayColor::Yellow);
+                fillColor = colorValue(DisplayColor::Blue);
+                textColor = colorValue(DisplayColor::White);
+            }
+            else
+            {
+                borderColor = colorValue(DisplayColor::White);
+                fillColor = colorValue(DisplayColor::Black);
+                textColor = colorValue(DisplayColor::White);
+            }
+        }
+        else
+        {
+            // Pending digit - White border, Black fill
+            borderColor = colorValue(DisplayColor::White);
+            fillColor = colorValue(DisplayColor::Black);
+            textColor = colorValue(DisplayColor::Cyan);
+        }
+
+        // Draw digit box
+        tft.fillRoundRect(boxX, boxY, boxWidth, boxHeight, 3, fillColor);
+        tft.drawRoundRect(boxX, boxY, boxWidth, boxHeight, 3, borderColor);
+
+        // Draw digit or underscore
+        char digit = enteredPin[i];
+        tft.setCursor(boxX + 8, boxY + 10);
+        tft.setTextSize(2);
+        tft.setTextColor(textColor);
+        if (digit >= '0' && digit <= '9')
+        {
+            tft.print(digit);
+        }
+        else
+        {
+            tft.print("_");
+        }
+    }
+
+    // Draw Next button
+    const int nextButtonX = 8;
+    const int nextButtonY = 115;
+    const int nextButtonW = 144;
+    const int nextButtonH = 30;
+
+    drawMenuButton(nextButtonX, nextButtonY, nextButtonW, nextButtonH, "Next", selectedIndex == 4);
+
+    // ---------- Footer ----------
+    drawFooter("Prev/Next + Select");
+}

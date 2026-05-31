@@ -6,7 +6,8 @@
 #include <User.h>
 #include <Account.h>
 
-const String API_URL = "https://bookswap.art/api";
+// const String API_URL = "https://bookswap.art/api";
+const String API_URL = "https://bankingappjava.onrender.com/api";
 extern User currentUser;
 extern Account currentAccount;
 
@@ -105,7 +106,7 @@ bool postTransaction(
     }
 }
 
-bool loginToApi(const String &email, const String &password)
+bool loginToApi(const String &email, const String &password, const String &pin)
 {
     if (WiFi.status() != WL_CONNECTED)
     {
@@ -149,6 +150,7 @@ bool loginToApi(const String &email, const String &password)
         return false;
     }
     currentUser = User(response); // Initialize currentUser with the response JSON
+    currentUser.pin = pin;        // Store the PIN in the user object for later use
 
     if (currentUser.token.length() == 0)
     {

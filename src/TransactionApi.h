@@ -24,7 +24,7 @@ bool postTransaction(
     const String &jwtToken,
     TransactionResponse &out);
 
-bool loginToApi(const String &email, const String &password);
+bool loginToApi(const String &email, const String &password, const String &pin);
 
 bool fetchUserAccounts(User &currentUser);
 float getAccountBalance(const int accountId);

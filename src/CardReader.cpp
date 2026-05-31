@@ -424,6 +424,7 @@ String userDataToJson(const User &user)
     StaticJsonDocument<256> doc;
     doc["email"] = user.email;
     doc["password"] = user.password;
+    doc["pin"] = user.pin;
     // Add more fields as needed
 
     String jsonString;
@@ -439,6 +440,7 @@ User jsonToUserData(const String &json)
     User user;
     user.email = doc["email"].as<String>();
     user.password = doc["password"].as<String>();
+    user.pin = doc["pin"].as<String>();
     // Initialize more fields as needed
 
     return user;
