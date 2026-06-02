@@ -332,18 +332,25 @@ bool cardPinIsValid(User user = currentUser)
 }
 void handleLogin(User &user)
 {
-  drawLoadingScreen("Logging in...");
-
-  bool loginSuccess = loginToApi(user.email, user.password, user.pin);
-
-  if (loginSuccess)
+  try
   {
-    fetchUserAccounts(currentUser);
-    showAccountSelection();
+    drawLoadingScreen("Logging in...");
+
+    bool loginSuccess = loginToApi(user.email, user.password, user.pin);
+
+    if (loginSuccess)
+    {
+      fetchUserAccounts(currentUser);
+      showAccountSelection();
+    }
+    else
+    {
+      drawResultScreen("Login Failed", "Invalid credentials", false);
+    }
   }
-  else
+  catch (const std::exception &e)
   {
-    drawResultScreen("Login Failed", "Invalid credentials", false);
+    drawResultScreen("Login Failed", String(e.what()), false);
   }
 }
 void handleSelect()
@@ -521,6 +528,7 @@ void setup()
   connectWiFi(WIFI_SSID, WIFI_PASSWORD);
 
   setupWebServer();
+  handleCreateCard();
 
   showCardloginScreen();
   // showPinEntryScreen();
