@@ -1,7 +1,7 @@
 #include "Servo.h"
 
 float currentAngle = 0.0;
-int angleToOpen = 145;
+int angleToOpen = 160;
 
 void setupServo()
 {
